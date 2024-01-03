@@ -4,7 +4,7 @@ format: html
 editor: visual
 ---
 
-## exercise 03
+## library
 
 ```{r}
 library(jiebaR)
@@ -21,7 +21,13 @@ library(SnowballC)
 library(yardstick)
 ```
 
-### a)
+## 统计词频
+
+### 数据处理/tokenize
+
+[汉语分词器，jiebaR](https://qinwenfeng.com/jiebaR/section-3.html#-workerstop_word)
+
+方法参考：[方法参考，chapter 7.6](https://alvinntnu.github.io/NTNU_ENC2036_LECTURES/chinese-text-processing.html#initialize-jiebar)
 
 ```{r}
 # 使用readr包中的read_csv函数读取CSV文件，将第一列命名为"no"
@@ -46,7 +52,9 @@ bigice_word<- bigice %>%
   ungroup
 ```
 
-### 过滤停顿词：停顿词词表<https://github.com/goto456/stopwords/tree/master>
+### 过滤停顿词
+
+[汉语停顿词词表](https://github.com/goto456/stopwords/tree/master)
 
 ```{r}
 stop_words_hit<-readLines("/Users/macbookpro/Downloads/bigice/hit_stopwords.txt")
@@ -63,7 +71,7 @@ clean_bigice_word<-clean_bigice_word%>%
   filter(!word %in% stop_words_baidu)
 ```
 
-统计词频
+### 统计词频
 
 ```{r}
 top_words <- clean_bigice_word %>%
@@ -71,6 +79,8 @@ top_words <- clean_bigice_word %>%
   arrange(desc(n)) %>%
   top_n(20, n)
 ```
+
+### 绘图
 
 ```{r}
 ggplot(top_words, aes(x = reorder(word, n), y = n, fill = word)) +
