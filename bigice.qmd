@@ -27,7 +27,7 @@ library(yardstick)
 
 [汉语分词器，jiebaR](https://qinwenfeng.com/jiebaR/section-3.html#-workerstop_word)
 
-方法参考：[方法参考，chapter 7.6](https://alvinntnu.github.io/NTNU_ENC2036_LECTURES/chinese-text-processing.html#initialize-jiebar)
+[方法参考，chapter 7.6](https://alvinntnu.github.io/NTNU_ENC2036_LECTURES/chinese-text-processing.html#initialize-jiebar)
 
 ```{r}
 # 使用readr包中的read_csv函数读取CSV文件，将第一列命名为"no"
@@ -84,6 +84,24 @@ top_words <- clean_bigice_word %>%
 
 ```{r}
 ggplot(top_words, aes(x = reorder(word, n), y = n, fill = word)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  # 使条形图水平显示
+  theme_minimal() +
+  theme(text = element_text(family = "STHeiti"),#字体必须为宋体，否则只能显示空白方格
+       legend.position = "none") +  # 不显示图例
+  labs(x = "Word", y = "Frequency", title = "Top 20 Word Frequencies in '我不'")
+```
+
+词频统计加强版，过滤单个汉字
+
+```{r}
+bigice_words_filtered <- clean_bigice_word %>%
+  filter(nchar(word) > 1)#过滤单个汉字，仅保留有意义的词组
+top_words_filtered <- bigice_words_filtered %>%
+  count(word)%>%
+  arrange(desc(n)) %>%
+  top_n(20, n)
+ggplot(top_words_filtered, aes(x = reorder(word, n), y = n, fill = word)) +
   geom_bar(stat = "identity") +
   coord_flip() +  # 使条形图水平显示
   theme_minimal() +
