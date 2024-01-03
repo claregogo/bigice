@@ -19,6 +19,9 @@ library(stopwords)
 library(broom)
 library(SnowballC)
 library(yardstick)
+library(stringr)
+library(topicmodels)
+library(textrecipes)
 ```
 
 ## 统计词频
@@ -92,7 +95,7 @@ ggplot(top_words, aes(x = reorder(word, n), y = n, fill = word)) +
   labs(x = "Word", y = "Frequency", title = "Top 20 Word Frequencies in '我不'")
 ```
 
-词频统计加强版，过滤单个汉字
+### 词频统计加强版，过滤单个汉字
 
 ```{r}
 bigice_words_filtered <- clean_bigice_word %>%
@@ -108,4 +111,160 @@ ggplot(top_words_filtered, aes(x = reorder(word, n), y = n, fill = word)) +
   theme(text = element_text(family = "STHeiti"),#字体必须为宋体，否则只能显示空白方格
        legend.position = "none") +  # 不显示图例
   labs(x = "Word", y = "Frequency", title = "Top 20 Word Frequencies in '我不'")
+```
+
+## lda主题分析
+
+```{r}
+#将数据转化为矩阵
+word_dtm <- bigice_words_filtered %>%
+  cast_dtm(line,word, word_id)#每一列的名字
+#使用lda计算概率
+word_lda <- LDA(word_dtm, k = 4, control = list(seed = 1234))
+word_lda
+word_topics <- tidy(word_lda, matrix = "beta")
+word_topics 
+top_terms <- word_topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>% 
+  ungroup() %>%
+  arrange(topic, -beta)
+top_terms
+```
+
+```{r}
+library(ggplot2)
+top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  scale_y_reordered()+
+  theme(text = element_text(family = "STHeiti"))
+```
+
+## 大点冰：四部冰学巨著主题分析
+
+### 数据预处理，开始大点冰
+
+```{r}
+library(readr)
+good <- "Good, Pat on the Head.csv"
+howru <- "How Are You, Alright"
+no <- "no"
+youbad <- "You're Naughty"
+stopwords_files <- list.files("/Users/macbookpro/Downloads/bigice/stopwords", full.names = TRUE)
+all_stop_words <- unlist(lapply(stopwords_files, readLines))
+
+
+goodtext <- read_csv("/Users/macbookpro/Downloads/bigice/the_great_collection_of_bigice's_work/goodpatonthehead.csv",col_names = "text")%>%
+  filter(!is.na(text))%>%
+  mutate(line=row_number(text),
+         title="goodpatonthehead")
+## for word segmentation only
+my_seg <- worker(bylines = T,
+                 user = "demo_data/dict-ch-user-demo.txt",
+                 symbol = T)
+goodtext<- goodtext %>%
+  ## word tokenization
+  unnest_tokens(
+    output = word,
+    input = text,
+    token = function(x)
+      segment(x, jiebar = my_seg)
+  ) %>%
+  group_by(line) %>%
+  mutate(word_id = row_number()) %>% # create word index within each document
+  ungroup
+
+goodtext<-goodtext%>%
+  filter(!word %in% all_stop_words)
+goodtext<-goodtext%>%
+  filter(nchar(word) > 1)
+```
+
+提取所有冰书
+
+```{r}
+folder_path <- "/Users/macbookpro/Downloads/bigice/the_great_collection_of_bigice's_work" 
+# 获取文件夹中的所有xls文件
+file_list <- list.files(folder_path, pattern = ".csv$", full.names = TRUE)
+
+# 初始化一个空的列表，用于存储数据集
+data_list <- list()
+
+# 循环处理每个文件
+for (file_path in file_list) {
+  # 从文件路径中提取文件名（不包含文件格式）
+  file_name <- tools::file_path_sans_ext(basename(file_path))
+  
+  # 读取csv文件
+ bigice_collection <- read_csv(file_path,col_names = "text")%>%
+    mutate(line=row_number(text))
+    # 不包括前三行
+  
+  # 添加文件名作为一列
+  bigice_collection <- bigice_collection %>%
+    mutate(column_name = file_name)
+  # 存储到数据集列表
+  data_list[[file_name]] <- bigice_collection
+  # merged_data 包含了所有数据集的合并结果，包括单独文件的所有列
+  merged_bigice<- bind_rows(data_list)
+}
+```
+
+清理冰书
+
+```{r}
+merged_bigice<-merged_bigice%>%
+unnest_tokens(
+    output = word,
+    input = text,
+    token = function(x)
+      segment(x, jiebar = my_seg)
+  ) %>%
+  group_by(line) %>%
+  mutate(word_id = row_number()) %>% # create word index within each document
+  ungroup
+merged_bigice<-merged_bigice%>%
+  filter(!word %in% all_stop_words)
+merged_bigice<-merged_bigice%>%
+  filter(nchar(word) > 1)
+merged_bigice<-merged_bigice%>%
+  filter(!word =="na")
+merged_bigice<-merged_bigice%>%
+  rename(title=column_name)
+```
+
+```{r}
+merged_bigice_clean<-merged_bigice%>%
+  count(title, word, sort = TRUE)
+diffbigice_dtm <- merged_bigice_clean%>%
+  cast_dtm(title, word, n)
+diffbigice_lda <- LDA(diffbigice_dtm, k = 4, control = list(seed = 4848))
+diffbigice_topics <- tidy(diffbigice_lda, matrix = "beta")
+top_terms <- diffbigice_topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>% 
+  ungroup() %>%
+  arrange(topic, -beta)
+top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  scale_y_reordered()+
+  theme(text = element_text(family = "STHeiti"))
+```
+
+```{r}
+diffbigice_gamma <- tidy(diffbigice_lda, matrix = "gamma")
+diffbigice_gamma
+diffbigice_gamma %>%
+  mutate(title = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  geom_boxplot() +
+  facet_wrap(~ title) +
+  labs(x = "topic", y = expression(gamma))+
+  theme(text = element_text(family = "STHeiti"))
 ```
