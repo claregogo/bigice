@@ -1,0 +1,83 @@
+---
+title: "我不"
+format: html
+editor: visual
+---
+
+## exercise 03
+
+```{r}
+library(jiebaR)
+library(tidyverse)
+library(dplyr)
+library(ggthemes)
+library(patchwork)
+library(tidytext)
+library(forcats)
+library(textrecipes)
+library(stopwords)
+library(broom)
+library(SnowballC)
+library(yardstick)
+```
+
+### a)
+
+```{r}
+# 使用readr包中的read_csv函数读取CSV文件，将第一列命名为"no"
+text<- read_csv("/Users/macbookpro/Downloads/bigice/no.csv", skip = 165, col_names = "no")%>%
+  filter(!is.na(no))
+bigice<-text%>%
+  mutate(line=row_number(no))
+## for word segmentation only
+my_seg <- worker(bylines = T,
+                 user = "demo_data/dict-ch-user-demo.txt",
+                 symbol = T)
+bigice_word<- bigice %>%
+  ## word tokenization
+  unnest_tokens(
+    output = word,
+    input = no,
+    token = function(x)
+      segment(x, jiebar = my_seg)
+  ) %>%
+  group_by(line) %>%
+  mutate(word_id = row_number()) %>% # create word index within each document
+  ungroup
+```
+
+### 过滤停顿词：停顿词词表<https://github.com/goto456/stopwords/tree/master>
+
+```{r}
+stop_words_hit<-readLines("/Users/macbookpro/Downloads/bigice/hit_stopwords.txt")
+clean_bigice_word<-bigice_word%>%
+  filter(!word %in% stop_words_hit)
+stop_words_scu<-readLines("/Users/macbookpro/Downloads/bigice/scu_stopwords.txt")
+clean_bigice_word<-clean_bigice_word%>%
+  filter(!word %in% stop_words_scu)
+stop_words_cn<-readLines("/Users/macbookpro/Downloads/bigice/cn_stopwords.txt")
+clean_bigice_word<-clean_bigice_word%>%
+  filter(!word %in% stop_words_cn)
+stop_words_baidu<-readLines("/Users/macbookpro/Downloads/bigice/baidu_stopwords.txt")
+clean_bigice_word<-clean_bigice_word%>%
+  filter(!word %in% stop_words_baidu)
+```
+
+统计词频
+
+```{r}
+top_words <- clean_bigice_word %>%
+  count(word)%>%
+  arrange(desc(n)) %>%
+  top_n(20, n)
+```
+
+```{r}
+ggplot(top_words, aes(x = reorder(word, n), y = n, fill = word)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  # 使条形图水平显示
+  theme_minimal() +
+  theme(text = element_text(family = "STHeiti"),#字体必须为宋体，否则只能显示空白方格
+       legend.position = "none") +  # 不显示图例
+  labs(x = "Word", y = "Frequency", title = "Top 20 Word Frequencies in '我不'")
+```
